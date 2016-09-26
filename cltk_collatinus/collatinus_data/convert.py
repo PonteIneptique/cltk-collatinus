@@ -13,7 +13,7 @@ def normalize_unicode(lines):
 # Each line of Morphos.la represents a declension name
 #############################################################
 morphs_name = {}
-with open("./collatinus/collatinus_data/src/morphos.la") as f:
+with open("./cltk_collatinus/collatinus_data/src/morphos.la") as f:
     for index, line in enumerate(f.readlines()):
         morphs_name[index+1] = line.strip()
 
@@ -83,6 +83,8 @@ def convert_models(lines, normalize=False):
             elif line.startswith("R:"):
                 # Still do not know how to deal with "K"
                 root, remove, chars = __R.match(line).groups()
+                if chars == "0":
+                    chars = ""
                 models[last_model]["R"][root] = [remove, chars]
             elif line.startswith("des"):
                 # We have new endings
@@ -105,7 +107,7 @@ def convert_models(lines, normalize=False):
 
                 ids = parse_range(des_number)
                 for i, d in zip(ids, des.split(";")):
-                    models[last_model]["des"][i] = (root, d.replace("-", "").split(","))
+                    models[last_model]["des"][int(i)] = (root, d.replace("-", "").split(","))
             elif line.startswith("abs:"):
                 models[last_model]["abs"] = parse_range(line[4:])  # Add the one we should not find as desi
             elif line.startswith("suf:"):
@@ -118,7 +120,7 @@ def convert_models(lines, normalize=False):
     return models
 
 
-with open("./collatinus/collatinus_data/src/modeles.la") as f:
+with open("./cltk_collatinus/collatinus_data/src/modeles.la") as f:
     lines = f.read().split("\n")
     models = convert_models(lines)
     norm_models = convert_models(lines, True)
@@ -151,14 +153,6 @@ def parseLemma(lines, normalize=False):
     """
 
     lemmas = {}
-    __model = {
-        "lemma": "",
-        "quantity": "",  # Unused desinence if inherits
-        "model": "",  # Dict of desinences
-        "gen-inf": "",  # Dict of Suffixes
-        "perf": "",  # Possible endings
-        "morph": ""
-    }
     regexp = re.compile("^(?P<lemma>\w+){1}(?P<quantity>\=\w+)?\|(?P<model>\w+)?\|[-]*(?P<geninf>[\w,]+)?[-]*\|[-]*(?P<perf>[\w,]+)?[-]*\|(?P<lexicon>.*)?", flags=re.UNICODE)
 
     if normalize:
@@ -185,7 +179,7 @@ def parseLemma(lines, normalize=False):
                 lemmas[normalize_unicode(result["lemma"])] = result
     return lemmas
 
-with open("./collatinus/collatinus_data/src/lemmes.la") as f:
+with open("./cltk_collatinus/collatinus_data/src/lemmes.la") as f:
     lines = f.read().split("\n")
     lemmas = parseLemma(lines, True)
 
@@ -194,7 +188,7 @@ assert lemmas["volumen"]["geninf"] == "volumin"
 assert lemmas["volumen"]["lemma"] == "volumen"
 assert lemmas["volumen"]["model"] == "corpus"
 
-with open("./collatinus/collatinus_data/collected.json", "w") as f:
+with open("./cltk_collatinus/collatinus_data/collected.json", "w") as f:
     json.dump(
         {
             "morph-name": morphs_name,
