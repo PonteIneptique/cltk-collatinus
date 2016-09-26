@@ -4,6 +4,10 @@ from copy import deepcopy
 import unicodedata
 
 
+def normalize_unicode(lines):
+    return unicodedata.normalize('NFKD', lines).encode('ASCII', 'ignore').decode()
+
+
 #############################################################
 # Convert morphos.la
 # Each line of Morphos.la represents a declension name
@@ -56,7 +60,7 @@ def convert_models(lines, normalize=False):
 
     if normalize:
         lines = "\n".join(lines)
-        lines = unicodedata.normalize('NFKD', lines).encode('ASCII', 'ignore').decode()
+        lines = normalize_unicode(lines)
         lines = lines.split("\n")
 
     for lineno, line in enumerate(lines):
@@ -130,6 +134,66 @@ assert norm_models["fortis"]["des"][13] == ("4", ['']),\
 assert norm_models["fortis"]["des"][51] == ("1", ["iorem"]),\
     "Root 4, Empty string (originally '-') found %s %s" % norm_models["fortis"]["des"][50]
 
+############################################
+#
+#   Get the lemma converter
+#
+# lemma=lemma|model|genitive/infectum|perfectu|morpho indications
+#
+############################################
+
+def parseLemma(lines, normalize=False):
+    """
+
+    :param lines:
+    :param normalize:
+    :return:
+    """
+
+    lemmas = {}
+    __model = {
+        "lemma": "",
+        "quantity": "",  # Unused desinence if inherits
+        "model": "",  # Dict of desinences
+        "gen-inf": "",  # Dict of Suffixes
+        "perf": "",  # Possible endings
+        "morph": ""
+    }
+    regexp = re.compile("^(?P<lemma>\w+){1}(?P<quantity>\=\w+)?\|(?P<model>\w+)?\|[-]*(?P<geninf>[\w,]+)?[-]*\|[-]*(?P<perf>[\w,]+)?[-]*\|(?P<lexicon>.*)?", flags=re.UNICODE)
+
+    if normalize:
+        lines = "\n".join(lines)
+        lines = normalize_unicode(lines)
+        lines = lines.split("\n")
+
+    for lineno, line in enumerate(lines):
+        if not line.startswith("!") and "|" in line:
+            if line.count("|") != 4:
+                # We need to clean up the mess
+                # Some line lacks a |
+                # I assume this means we need to add as many before the dictionary
+                should_have = 4
+                missing = should_have - line.count("|")
+                last_one = line.rfind("|")
+                line = line[:last_one] + "|" * missing + line[last_one:]
+            result = regexp.match(line)
+            if not result:
+                print(line)
+            else:
+                result = result.groupdict(default=None)
+                # we always normalize the key
+                lemmas[normalize_unicode(result["lemma"])] = result
+    return lemmas
+
+with open("./collatinus/collatinus_data/src/lemmes.la") as f:
+    lines = f.read().split("\n")
+    lemmas = parseLemma(lines, True)
+
+
+assert lemmas["volumen"]["geninf"] == "volumin"
+assert lemmas["volumen"]["lemma"] == "volumen"
+assert lemmas["volumen"]["model"] == "corpus"
+
 with open("./collatinus/collatinus_data/collected.json", "w") as f:
     json.dump(
         {
@@ -137,7 +201,8 @@ with open("./collatinus/collatinus_data/collected.json", "w") as f:
             "scansions": {
                 "models": models
             },
-            "models": norm_models
+            "models": norm_models,
+            "lemmas": lemmas
         },
         f
     )
