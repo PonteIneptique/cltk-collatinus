@@ -115,11 +115,12 @@ class LatinDecliner:
 
         # Generate the return dict
         forms = {key: [] for key in keys}
-        for key, form in forms_data:
-            root_id, endings = tuple(form)
-            for root in roots[root_id]:
-                for ending in endings:
-                    forms[key].append(root + ending)
+        for key, form_list in forms_data:
+            for form in form_list:
+                root_id, endings = tuple(form)
+                for root in roots[root_id]:
+                    for ending in endings:
+                        forms[key].append(root + ending)
 
         # sufd means we have the original forms of the parent but we add a suffix
         if len(model["sufd"]):
@@ -285,8 +286,8 @@ if __name__ == "__main__":
             )
             self.assertEqual(
                 self.decliner.decline("poesis"),
-                {1: ['poesis'], 2: ['poesis'], 3: ['poesin', "poesim"], 4: ['poeseos'], 5: ['poesi'], 6: ['poese'], 7: ['poeses'],
-                 8: ['poeses'], 9: ['poesis'], 10: ['poesium'], 11: ['poesibus'], 12: ['poesibus']},
+                {1: ['poesis'], 2: ['poesis'], 3: ["poesem", 'poesin', "poesim"], 4: ["poesis", 'poeseos'], 5: ['poesi'], 6: ['poese'], 7: ['poeses'],
+                 8: ['poeses'], 9: ["poeses", 'poesis'], 10: ['poesium'], 11: ['poesibus'], 12: ['poesibus']},
                 "Duplicity of forms should be accepted"
             )
 
@@ -325,9 +326,14 @@ if __name__ == "__main__":
                 self.decliner.decline("plerique"),
                 {19: ['plerique'], 20: ['plerique'], 21: ['plerosque'], 22: ['plerorumque'], 23: ['plerisque'],
                  24: ['plerisque'], 31: ['pleraeque'], 32: ['pleraeque'], 33: ['plerasque'], 34: ['plerarumque'],
-                 35: ['plerisque'], 36: ['plerisque'], 44: ['pleraque'], 45: ['pleraque'], 46: ['plerorumque'],
-                 47: ['plerisque'], 48: ['plerisque']},
+                 35: ['plerisque'], 36: ['plerisque'], 43: ['pleraque'], 44: ['pleraque'], 45: ['pleraque'],
+                 46: ['plerorumque'], 47: ['plerisque'], 48: ['plerisque']},
                 "Checking abs is applied correctly"
+            )
+            self.assertEqual(
+                self.decliner.decline("edo")[122] + self.decliner.decline("edo")[163],
+                ["edis", "es"] + ['ederem', 'essem'],
+                "Alternative desisences should be added, even with different root"
             )
 
         def test_flatten_decline(self):
@@ -339,8 +345,8 @@ if __name__ == "__main__":
             )
             self.assertEqual(
                 self.decliner.decline("poesis", flatten=True),
-                ['poesis', 'poesis', 'poesin', 'poesim', 'poeseos', 'poesi', 'poese', 'poeses', 'poeses', 'poesis',
-                 'poesium', 'poesibus', 'poesibus'],
+                ['poesis', 'poesis', 'poesem', 'poesin', 'poesim', 'poesis', 'poeseos', 'poesi', 'poese', 'poeses',
+                 'poeses', 'poeses', 'poesis', 'poesium', 'poesibus', 'poesibus'],
                 "Duplicity of forms should be accepted"
             )
 

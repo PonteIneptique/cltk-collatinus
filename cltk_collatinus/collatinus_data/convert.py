@@ -111,7 +111,10 @@ def convert_models(lines, normalize=False):
 
                 ids = parse_range(des_number)
                 for i, d in zip(ids, des.split(";")):
-                    models[last_model]["des"][int(i)] = (root, d.replace("-", "").split(","))
+                    if line.startswith("des+") and int(i) in models[last_model]["des"]:
+                        models[last_model]["des"][int(i)].append((root, d.replace("-", "").split(",")))
+                    else:
+                        models[last_model]["des"][int(i)] = [(root, d.replace("-", "").split(","))]
             elif line.startswith("abs:"):
                 models[last_model]["abs"] = parse_range(line[4:])  # Add the one we should not find as desi
             elif line.startswith("suf:"):
@@ -126,19 +129,20 @@ def convert_models(lines, normalize=False):
 
 with open("./cltk_collatinus/collatinus_data/src/modeles.la") as f:
     lines = f.read().split("\n")
-    models = convert_models(lines)
+    # models = convert_models(lines)
     norm_models = convert_models(lines, True)
 
 
-assert models["fortis"]["des"][13] == ("4", ['']),\
-    "Root 4, Empty string (originally '-'), found %s %s" % models["fortis"]["des"][13]
-assert models["fortis"]["des"][51] == ("1", ["ĭōrĕm"]),\
-    "Root 4, iorem found %s %s" % models["fortis"]["des"][50]
+assert norm_models["fortis"]["des"][13] == [("4", [''])],\
+    "Root 4, Empty string (originally '-') expected, found %s %s" % norm_models["fortis"]["des"][13][0]
+assert norm_models["fortis"]["des"][51] == [("1", ["iorem"])],\
+    "Root 4, iorem expected, found %s %s" % norm_models["fortis"]["des"][50][0]
 
-assert norm_models["fortis"]["des"][13] == ("4", ['']),\
-    "Root 4, Empty string (originally '-'), found %s %s" % norm_models["fortis"]["des"][13]
-assert norm_models["fortis"]["des"][51] == ("1", ["iorem"]),\
-    "Root 4, Empty string (originally '-') found %s %s" % norm_models["fortis"]["des"][50]
+assert norm_models["dico"]["des"][181] == [("0", ["e"]), ("0", [""])],\
+    "[(0, e), (0, ''), found %s %s " % tuple([str(x) for x in norm_models["dico"]["des"][181]])
+
+assert norm_models["edo"]["des"][122] == [("0", ["is"]), ("3", ["es"])],\
+    "[(0, is), (3, es), found %s %s " % tuple([str(x) for x in norm_models["edo"]["des"][122]])
 
 ############################################
 #
@@ -196,9 +200,6 @@ with open("./cltk_collatinus/collatinus_data/collected.json", "w") as f:
     json.dump(
         {
             "morph-name": morphs_name,
-            "scansions": {
-                "models": models
-            },
             "models": norm_models,
             "lemmas": lemmas
         },
