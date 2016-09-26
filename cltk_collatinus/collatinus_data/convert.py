@@ -50,7 +50,7 @@ def convert_models(lines, normalize=False):
         "R": {},
         "abs": [],  # Unused desinence if inherits
         "des": {},  # Dict of desinences
-        "suf": {},  # Dict of Suffixes
+        "suf": [],  # Dict of Suffixes
         "sufd": []  # Possible endings
     }
     __R = re.compile("^R:(?P<root>\d+):(?P<remove>\w+)[,:]?(?P<add>\w+)?", flags=re.UNICODE)
@@ -94,7 +94,7 @@ def convert_models(lines, normalize=False):
                     for var, rep in variable_replacement.items():
                         # First we replace +$
                         line = re.sub(
-                            "(\w+)(\+\{})".format(var),
+                            "(\w+)(\+?\{})".format(var),
                             lambda x: (
                                 ";".join([x.group(1) + r for r in rep.split(";")])
                             ),
@@ -103,7 +103,11 @@ def convert_models(lines, normalize=False):
                         line = line.replace(var, rep)
                         if "$" not in line:
                             break
-                des_number, root, des = __des.match(line).groups()
+                try:
+                    des_number, root, des = __des.match(line).groups()
+                except AttributeError as E:
+                    print(line)
+                    raise E
 
                 ids = parse_range(des_number)
                 for i, d in zip(ids, des.split(";")):
@@ -112,9 +116,9 @@ def convert_models(lines, normalize=False):
                 models[last_model]["abs"] = parse_range(line[4:])  # Add the one we should not find as desi
             elif line.startswith("suf:"):
                 rng, suf = tuple(line[4:].split(":"))
-                models[last_model]["suf"] = {i: suf for i in parse_range(rng)}  # Sufd are suffix always present
+                models[last_model]["suf"].append([suf, list(parse_range(rng))])  # Suffixes are alternative ending
             elif line.startswith("sufd:"):
-                models[last_model]["sufd"] = line[5:]  # Sufd are suffix always present. Can has alternative
+                models[last_model]["sufd"] += line[5:].split(",")  # Sufd are suffix always present
             else:
                 print(line.split(":")[0])
     return models
@@ -129,7 +133,7 @@ with open("./cltk_collatinus/collatinus_data/src/modeles.la") as f:
 assert models["fortis"]["des"][13] == ("4", ['']),\
     "Root 4, Empty string (originally '-'), found %s %s" % models["fortis"]["des"][13]
 assert models["fortis"]["des"][51] == ("1", ["ĭōrĕm"]),\
-    "Root 4, Empty string (originally '-') found %s %s" % models["fortis"]["des"][50]
+    "Root 4, iorem found %s %s" % models["fortis"]["des"][50]
 
 assert norm_models["fortis"]["des"][13] == ("4", ['']),\
     "Root 4, Empty string (originally '-'), found %s %s" % norm_models["fortis"]["des"][13]

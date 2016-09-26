@@ -31,12 +31,13 @@ class LatinDecliner:
         self.__models__ = self.__data__["models"]
         self.__lemmas__ = self.__data__["lemmas"]
 
-    def getRoots(self, lemma, model_roots=None):
+    def getRoots(self, lemma, model=None):
         """ Retrieve the known roots of a lemma
 
         :param lemma: Canonical form of the word (lemma)
         :type lemma: str
-        :param model_roots: I
+        :param model_roots: Model data from the loaded self.__data__. Can be passed by decline()
+        :type model_roots: dict
         :return: Dictionary of roots with their root identifier as key
         :rtype: dict
         """
@@ -58,18 +59,18 @@ class LatinDecliner:
         }
         returned_roots = {}
 
-        if not model_roots:
-            model_roots = self.__models__[lemma_entry["model"]]["R"]
+        if not model:
+            model = self.__models__[lemma_entry["model"]]
 
         # For each registered root in the model,
-        for model_root_id, model_root_data in model_roots.items():
+        for model_root_id, model_root_data in model["R"].items():
 
             # If we have K, it's equivalent to canonical form
             if model_root_data[0] == "K":
                 returned_roots[model_root_id] = [lemma_entry["lemma"]]
             # Otherwise we have deletion number and addition char
             else:
-                deletion, addition = int(model_root_data[0]), model_root_data[1]
+                deletion, addition = int(model_root_data[0]), model_root_data[1] or ""
 
                 # If a the root is declared already,
                 # we retrieve the information
@@ -77,13 +78,12 @@ class LatinDecliner:
                     lemma_roots = returned_roots[model_root_id]
                 else:
                     lemma_roots = lemma_entry["lemma"].split(",")
-
+                # We construct the roots
                 returned_roots[model_root_id] = [
                     lemma_root[:-deletion] + addition
                     for lemma_root in lemma_roots
                 ]
 
-        # We update with the new roots
         original_roots.update(returned_roots)
         return original_roots
 
@@ -107,7 +107,7 @@ class LatinDecliner:
         model = self.__models__[lemma_entry["model"]]
 
         # Get the roots
-        roots = self.getRoots(lemma, model_roots=model["R"])
+        roots = self.getRoots(lemma, model=model)
 
         # Get the known forms in order
         keys = sorted([int(key) for key in model["des"].keys()])
@@ -120,6 +120,34 @@ class LatinDecliner:
             for root in roots[root_id]:
                 for ending in endings:
                     forms[key].append(root + ending)
+
+        # sufd means we have the original forms of the parent but we add a suffix
+        if len(model["sufd"]):
+            # For each constant form1
+            for key, iter_forms in forms.items():
+                new_forms = []
+                # We add the constant suffix
+                for sufd in model["sufd"]:
+                    new_forms += [form+sufd for form in iter_forms]
+                forms[key] = new_forms
+
+        # If we need a secure version of the forms. For example, if we have variants
+        if len(model["suf"]):
+            cached_forms = {k: v+[] for k, v in forms.items()}  # Making cache without using copy
+
+        # For each suffix
+        # The format is [suffix characters, [modified forms]]
+        for suffixes in model["suf"]:
+            suffix, modified_forms = suffixes[0], suffixes[1]
+            for modified_form in modified_forms:
+                forms[modified_form] += [f+suffix for f in cached_forms[modified_form]]
+        # We update with the new roots
+
+        # If some form do not exist, we delete them prehentively
+        if len(model["abs"]):
+            for abs_form in model["abs"]:
+                if abs_form in forms:
+                    del forms[abs_form]
 
         if flatten:
             return list([form for case_forms in forms.values() for form in case_forms])
@@ -150,12 +178,13 @@ if __name__ == "__main__":
             )
             self.assertEqual(
                 self.decliner.getRoots("amo"),
-                {"0": ["am"], "1": ["amau"], "2": ["amat"]},
-                "Amo has three roots : am, amau, amat [Remove > 1 char, Add > 1 char]"
+                {"0": ["am"], "1": ["amav"], "2": ["amat"]},
+                "Amo has three roots : am, amav, amat [Remove > 1 char, Add > 1 char]"
             )
 
         def test_decline(self):
             """ Ensure lemmatization works well """
+            self.maxDiff = 7000
             self.assertEqual(
                 self.decliner.decline("via"),
                 {1: ['via'], 2: ['via'], 3: ['viam'], 4: ['viae'], 5: ['viae'], 6: ['via'], 7: ['viae'],
@@ -200,17 +229,17 @@ if __name__ == "__main__":
                 {121: ['vendo'], 122: ['vendis'], 123: ['vendit'], 124: ['vendimus'], 125: ['venditis'],
                  126: ['vendunt'], 127: ['vendebam'], 128: ['vendebas'], 129: ['vendebat'], 130: ['vendebamus'],
                  131: ['vendebatis'], 132: ['vendebant'], 133: ['vendam'], 134: ['vendes'], 135: ['vendet'],
-                 136: ['vendemus'], 137: ['vendetis'], 138: ['vendent'], 139: ['vendaui'], 140: ['vendauisti'],
-                 141: ['vendauit'], 142: ['vendauimus'], 143: ['vendauistis'], 144: ['vendauerunt', 'vendauere'],
-                 145: ['vendaueram'], 146: ['vendaueras'], 147: ['vendauerat'], 148: ['vendaueramus'],
-                 149: ['vendaueratis'], 150: ['vendauerant'], 151: ['vendauero'], 152: ['vendaueris'],
-                 153: ['vendauerit'], 154: ['vendauerimus'], 155: ['vendaueritis'], 156: ['vendauerint'],
+                 136: ['vendemus'], 137: ['vendetis'], 138: ['vendent'], 139: ['vendavi'], 140: ['vendavisti'],
+                 141: ['vendavit'], 142: ['vendavimus'], 143: ['vendavistis'], 144: ['vendaverunt', 'vendavere'],
+                 145: ['vendaveram'], 146: ['vendaveras'], 147: ['vendaverat'], 148: ['vendaveramus'],
+                 149: ['vendaveratis'], 150: ['vendaverant'], 151: ['vendavero'], 152: ['vendaveris'],
+                 153: ['vendaverit'], 154: ['vendaverimus'], 155: ['vendaveritis'], 156: ['vendaverint'],
                  157: ['vendam'], 158: ['vendas'], 159: ['vendat'], 160: ['vendamus'], 161: ['vendatis'],
                  162: ['vendant'], 163: ['venderem'], 164: ['venderes'], 165: ['venderet'], 166: ['venderemus'],
-                 167: ['venderetis'], 168: ['venderent'], 169: ['vendauerim'], 170: ['vendaueris'], 171: ['vendauerit'],
-                 172: ['vendauerimus'], 173: ['vendaueritis'], 174: ['vendauerint'], 175: ['vendauissem'],
-                 176: ['vendauisses'], 177: ['vendauisset'], 178: ['vendauissemus'], 179: ['vendauissetis'],
-                 180: ['vendauissent'], 181: ['vende'], 182: ['vendite'], 183: ['vendito'], 184: ['vendito'],
+                 167: ['venderetis'], 168: ['venderent'], 169: ['vendaverim'], 170: ['vendaveris'], 171: ['vendaverit'],
+                 172: ['vendaverimus'], 173: ['vendaveritis'], 174: ['vendaverint'], 175: ['vendavissem'],
+                 176: ['vendavisses'], 177: ['vendavisset'], 178: ['vendavissemus'], 179: ['vendavissetis'],
+                 180: ['vendavissent'], 181: ['vende'], 182: ['vendite'], 183: ['vendito'], 184: ['vendito'],
                  185: ['venditote'], 186: ['vendunto'], 187: ['vendere'], 188: ['vendasse'], 189: ['vendens'],
                  190: ['vendens'], 191: ['vendentem'], 192: ['vendentis'], 193: ['vendenti'], 194: ['vendente'],
                  195: ['vendentes'], 196: ['vendentes'], 197: ['vendentes'], 198: ['vendentium', 'vendentum'],
@@ -232,9 +261,10 @@ if __name__ == "__main__":
                  269: ['venditur'], 270: ['vendimur'], 271: ['vendimini'], 272: ['venduntur'], 273: ['vendebar'],
                  274: ['vendebaris', 'vendebare'], 275: ['vendebatur'], 276: ['vendebamur'], 277: ['vendebamini'],
                  278: ['vendebantur'], 279: ['vendar'], 280: ['venderis', 'vendere'], 281: ['vendetur'],
-                 282: ['vendemur'], 283: ['vendemini'], 284: ['vendentur'], 285: ['vendar'], 286: ['vendaris'],
+                 282: ['vendemur'], 283: ['vendemini'], 284: ['vendentur'], 285: ['vendar'], 286: ['vendaris',
+                                                                                                   'vendare'],
                  287: ['vendatur'], 288: ['vendamur'], 289: ['vendamini'], 290: ['vendantur'], 291: ['venderer'],
-                 292: ['vendereris'], 293: ['venderetur'], 294: ['venderemur'], 295: ['venderemini'],
+                 292: ['vendereris', "venderere"], 293: ['venderetur'], 294: ['venderemur'], 295: ['venderemini'],
                  296: ['venderentur'], 297: ['vendere'], 298: ['vendimini'], 299: ['venditor'], 300: ['venditor'],
                  301: ['venduntor'], 302: ['vendi'], 303: ['vendatus'], 304: ['vendate'], 305: ['vendatum'],
                  306: ['vendati'], 307: ['vendato'], 308: ['vendato'], 309: ['vendati'], 310: ['vendati'],
@@ -255,9 +285,49 @@ if __name__ == "__main__":
             )
             self.assertEqual(
                 self.decliner.decline("poesis"),
-                {1: ['poesis'], 2: ['poesis'], 3: ['poesem'], 4: ['poesis'], 5: ['poesi'], 6: ['poese'], 7: ['poeses'],
-                 8: ['poesin', 'poesim'], 9: ['poeseos'], 10: ['poesium'], 11: ['poesibus'], 12: ['poesibus']},
+                {1: ['poesis'], 2: ['poesis'], 3: ['poesin', "poesim"], 4: ['poeseos'], 5: ['poesi'], 6: ['poese'], 7: ['poeses'],
+                 8: ['poeses'], 9: ['poesis'], 10: ['poesium'], 11: ['poesibus'], 12: ['poesibus']},
                 "Duplicity of forms should be accepted"
+            )
+
+            self.assertEqual(
+                self.decliner.decline("hic"),
+                {13: ['hic', 'hice', 'hicine'], 15: ['hunc'], 16: ['hujus', 'hujusce'], 17: ['huic'],
+                 18: ['hoc', 'hocine'], 19: ['hi'], 21: ['hos', 'hosce'], 22: ['horum'],
+                 23: ['his', 'hisce'], 24: ['his', 'hisce'], 25: ['haec', 'haece', 'haecine', 'haeccine'],
+                 27: ['hanc'], 28: ['hujus', 'hujusce'], 29: ['huic'], 30: ['hac'], 31: ['hae'],
+                 33: ['has', 'hasce'], 34: ['harum'], 35: ['his', 'hisce'], 36: ['his', 'hisce'], 37: ['hoc', 'hocine'],
+                 39: ['hoc', 'hocine'], 40: ['hujus', 'hujusce'], 41: ['huic'], 42: ['hoc', 'hocine'],
+                 43: ['haec', 'haecine', 'haeccine'], 45: ['ha', 'haine', 'hacine'], 46: ['horum'],
+                 47: ['his', 'hisce'], 48: ['his', 'hisce']},
+                "Check that suffixes are well added"
+            )
+
+            self.assertEqual(
+                self.decliner.decline("quicumque"),
+                {13: ['quicumque', 'quicunque'], 15: ['quemcumque', 'quemcunque'],
+                 16: ['cujuscumque', 'quojuscumque', 'cujuscunque', 'quojuscunque'],
+                 17: ['cuicumque', 'quoicumque', 'cuicunque', 'quoicunque'], 18: ['quocumque', 'quocunque'],
+                 19: ['quicumque', 'quicunque'], 21: ['quoscumque', 'quoscunque'], 22: ['quorumcumque', 'quorumcunque'],
+                 23: ['quibuscumque', 'quibuscunque'], 25: ['quaecumque', 'quaecunque'],
+                 27: ['quamcumque', 'quamcunque'], 28: ['cujuscumque', 'quojuscumque', 'cujuscunque', 'quojuscunque'],
+                 29: ['cuicumque', 'quoicumque', 'cuicunque', 'quoicunque'], 30: ['quacumque', 'quacunque'],
+                 31: ['quaecumque', 'quaecunque'], 33: ['quascumque', 'quascunque'],
+                 34: ['quarumcumque', 'quarumcunque'], 35: ['quibuscumque', 'quibuscunque'],
+                 37: ['quodcumque', 'quodcunque'], 39: ['quodcumque', 'quodcunque'],
+                 40: ['cujuscumque', 'quojuscumque', 'cujuscunque', 'quojuscunque'],
+                 41: ['cuicumque', 'quoicumque', 'cuicunque', 'quoicunque'], 42: ['quocumque', 'quocunque'],
+                 43: ['quaecumque', 'quaecunque'], 45: ['quaecumque', 'quaecunque'],
+                 46: ['quorumcumque', 'quorumcunque'], 47: ['quibuscumque', 'quibuscunque']},
+                "Constant suffix should be added"
+            )
+            self.assertEqual(
+                self.decliner.decline("plerique"),
+                {19: ['plerique'], 20: ['plerique'], 21: ['plerosque'], 22: ['plerorumque'], 23: ['plerisque'],
+                 24: ['plerisque'], 31: ['pleraeque'], 32: ['pleraeque'], 33: ['plerasque'], 34: ['plerarumque'],
+                 35: ['plerisque'], 36: ['plerisque'], 44: ['pleraque'], 45: ['pleraque'], 46: ['plerorumque'],
+                 47: ['plerisque'], 48: ['plerisque']},
+                "Checking abs is applied correctly"
             )
 
         def test_flatten_decline(self):
@@ -269,7 +339,7 @@ if __name__ == "__main__":
             )
             self.assertEqual(
                 self.decliner.decline("poesis", flatten=True),
-                ['poesis', 'poesis', 'poesem', 'poesis', 'poesi', 'poese', 'poeses', 'poesin', 'poesim', 'poeseos',
+                ['poesis', 'poesis', 'poesin', 'poesim', 'poeseos', 'poesi', 'poese', 'poeses', 'poeses', 'poesis',
                  'poesium', 'poesibus', 'poesibus'],
                 "Duplicity of forms should be accepted"
             )
